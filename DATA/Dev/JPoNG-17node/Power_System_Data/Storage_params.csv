@@ -1,0 +1,5 @@
+Storage technology,energy capex,power capex,charging efficiency,discharging efficiency,energy FOM,power FOM,lifetime,self-discharge
+Li-ion,129000,156000,0.92,0.92,3220,3900,15,2.08E-05
+Metal air-low cost,100,595000,0.7,0.59,0,14900,25,2.08E-05
+Metal air-medium cost,2400,643000,0.73,0.63,100,16100,25,2.08E-05
+Metal air-high cost,3600,950000,0.72,0.6,100,23700,25,2.08E-05
