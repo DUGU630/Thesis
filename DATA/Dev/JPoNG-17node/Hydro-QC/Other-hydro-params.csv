@@ -1,0 +1,3 @@
+init_energy_cap (MWh),max_energy_cap (MWh),max_power_cap (MW),min_output_rate,max_output_rate,ramp_rate,nodes_connected,max_flow_cap(MW),,FOM ($/MW/yr)
+122850000,175500000,41108,0.27,1,0.14,5,2000,,29312
+,,,,,,8,1200,,

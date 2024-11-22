@@ -1,0 +1,2 @@
+Power_network_size,base_year,rep_day_folder,num_rep_days,emis_case,electrification_scenario,,emis_reduc_goal ,VRE_share,CRM_reserve,copper_plate_approx,UC_active?,relax_UC_vars?,print_result_header,print_all_vars,relax_int_vars?,Metal_air_storage_cost,e_shed_penalty,g_shed_penalty,solver_gap,wall_clock_time_lim (h),solver_thread_num
+6,2011,'joint_CF_with_extreme_days',2,4,,HE,0.8,0.5,0.15,0,1,1,0,0,0,high,1.00E+04,1.00E+04,0.01,2,4

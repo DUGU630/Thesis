@@ -1,0 +1,6 @@
+WACC,NG_price ($/MMBtu),LCDF_supply (tBTu),LCDF_price ($/MMBtu),Uranium_price ($/MMBtu),NG_emission (ton/MW),trans_line_inv_cost (&/MW/mile),trans_line_FOM ($/MW/mile),trans_line_lifetime,pipeline_lifetime,SVL_lifetime,pipeline_inv_cost ($/mile),pipeline_FOM ($/mile),pipeline_decom_cost ($/mile),"resource_avail (solar,wind,offshore,nuclear,hydro)[MW]",Pennsylvania_carbon_storage_location (lat-lon),carbon_storage_cap (ton/year)
+0.07,5.45,,20,0.72,0.053,7398,24,30,50,30,2.00E+07,2.16E+04,0.00E+00,2.20E+04,4.14E+01,1.28E+07
+,,,,,,,,,,,,,,1.00E+04,77.967,
+,,,,,,,,,,,,,,2.80E+05,,
+,,,,,,,,,,,,,,3.80E+03,,
+,,,,,,,,,,,,,,2621,,
