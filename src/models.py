@@ -10,7 +10,7 @@ from pyclustering.utils.metric import distance_metric, type_metric
 from pyclustering.utils import read_sample
 
 
-class AggregationOptimizer:
+class Aggregation:
     def __init__(self, node_features, n_repr):
         """
         Initialize the optimizer with nodes, time series, and aggregation parameters.
@@ -28,6 +28,7 @@ class AggregationOptimizer:
                 'position': 1.0,
                 'time_series': 1.0,
                 'duration_curves': 1.0,
+                'rdc': 1.0,
                 'correlation': 1.0
             }
 
@@ -36,6 +37,7 @@ class AggregationOptimizer:
         position_matrix = np.zeros((num_nodes, num_nodes))
         time_series_matrix = np.zeros((num_nodes, num_nodes))
         duration_curves_matrix = np.zeros((num_nodes, num_nodes))
+        rdc_matrix = np.zeros((num_nodes, num_nodes))
         correlation_matrix = np.zeros((num_nodes, num_nodes))
 
         # Initialize min and max values for normalization
@@ -45,6 +47,8 @@ class AggregationOptimizer:
         max_time_series_distance = float('-inf')
         min_duration_curves_distance = float('inf')
         max_duration_curves_distance = float('-inf')
+        min_rdc_distance = float('inf')
+        max_rdc_distance = float('-inf')
         min_correlation_distance = float('inf')
         max_correlation_distance = float('-inf')
 
@@ -81,6 +85,15 @@ class AggregationOptimizer:
                     min_duration_curves_distance, duration_curves_distance)
                 max_duration_curves_distance = max(
                     max_duration_curves_distance, duration_curves_distance)
+
+                # RDC distance using Euclidean norm
+                rdc_distance = 0
+                for key in self.nodes_features[i]['ramp_duration_curves'].keys():
+                    rdc1 = self.nodes_features[i]['ramp_duration_curves'][key]
+                    rdc2 = self.nodes_features[j]['ramp_duration_curves'][key]
+                    rdc_distance += np.linalg.norm(rdc1 - rdc2)
+                min_rdc_distance = min(min_rdc_distance, rdc_distance)
+                max_rdc_distance = max(max_rdc_distance, rdc_distance)
 
                 # Correlation distance using absolute difference
                 correlation_distance = 0
@@ -129,6 +142,17 @@ class AggregationOptimizer:
                 duration_curves_matrix[j,
                                        i] = normalized_duration_curves_distance
 
+                # RDC distance using Euclidean norm
+                rdc_distance = 0
+                for key in self.nodes_features[i]['ramp_duration_curves'].keys():
+                    rdc1 = self.nodes_features[i]['ramp_duration_curves'][key]
+                    rdc2 = self.nodes_features[j]['ramp_duration_curves'][key]
+                    rdc_distance += np.linalg.norm(rdc1 - rdc2)
+                normalized_rdc_distance = (
+                    rdc_distance - min_rdc_distance) / (max_rdc_distance - min_rdc_distance)
+                rdc_matrix[i, j] = normalized_rdc_distance
+                rdc_matrix[j, i] = normalized_rdc_distance
+
                 # Correlation distance using absolute difference
                 correlation_distance = 0
                 for key in self.nodes_features[i]['correlation'].keys():
@@ -144,6 +168,7 @@ class AggregationOptimizer:
                 total_distance = (weights['position'] * normalized_position_distance +
                                   weights['time_series'] * normalized_time_series_distance +
                                   weights['duration_curves'] * normalized_duration_curves_distance +
+                                  weights['rdc'] * normalized_rdc_distance +
                                   weights['correlation'] * normalized_correlation_distance)
 
                 dist_matrix[i, j] = total_distance
@@ -154,6 +179,7 @@ class AggregationOptimizer:
             'position_distance': position_matrix,
             'time_series_distance': time_series_matrix,
             'duration_curves_distance': duration_curves_matrix,
+            'rdc_distance': rdc_matrix,
             'correlation_distance': correlation_matrix
         }
 
@@ -231,49 +257,23 @@ class AggregationOptimizer:
 
         return u_result, z_result
 
+    def cluster_KMedoids(self, weights=None):
+        """
+        Perform k-medoids clustering on the node features using the precomputed distance matrix.
+        """
 
-class AggregationClustering:
-    def __init__(self, node_features, n_repr):
-        """
-        Initialize the k-means aggregator with node features and the number of representative nodes.
-        """
-        self.node_features = node_features
-        self.n_repr = n_repr
-        self.num_nodes = len(node_features)
+        distance_matrices = self.distance_matrices(weights=weights)
+        total_distance_matrix = distance_matrices['total_distance']
 
-    def compute_feature_matrix(self):
-        """
-        Combine node features into a single feature matrix for clustering.
-        """
-        # Example: Flattening the position and other features into a feature vector
-        feature_matrix = []
-        for node in self.node_features:
-            position = self.node_features[node]['position']
-            time_series = np.concatenate(
-                [ts for ts in self.node_features[node]['time_series'].values()])
-            duration_curves = np.concatenate(
-                [dc for dc in self.node_features[node]['duration_curves'].values()])
-            correlation = np.array(
-                list(self.node_features[node]['correlation'].values()))
-            feature_vector = np.concatenate(
-                [position, time_series, duration_curves, correlation])
-            feature_matrix.append(feature_vector)
-
-        return np.array(feature_matrix)
-
-    def cluster_KMedoids(self):
-        """
-        Perform k-medoids clustering on the node features.
-        """
-        feature_matrix = self.compute_feature_matrix()
+        # Select initial medoids randomly
         initial_medoids = np.random.choice(
-            range(len(feature_matrix)), self.n_repr, replace=False)
+            range(self.num_nodes), self.n_repr, replace=False)
 
-        # Use K-Medoids clustering
+        # Use K-Medoids clustering with the custom distance matrix
         kmedoids_instance = kmedoids(
-            feature_matrix,
+            total_distance_matrix,
             initial_medoids.tolist(),
-            metric=distance_metric(type_metric.EUCLIDEAN)
+            data_type='distance_matrix'
         )
         kmedoids_instance.process()
 
@@ -288,25 +288,56 @@ class AggregationClustering:
 
         return cluster_mapping, medoids
 
-    def cluster_KMeans(self):
-        """
-        Perform k-means clustering on the node features.
-        """
-        feature_matrix = self.compute_feature_matrix()
+    # def cluster_KMedoids(self, weights=None):
+    #     """
+    #     Perform k-medoids clustering using the provided distance matrix.
+    #     """
+    #     distance_matrices = self.distance_matrices(weights=weights)
+    #     total_distance_matrix = distance_matrices['total_distance']
 
-        # Apply k-means clustering
-        kmeans = KMeans(n_clusters=self.n_repr, random_state=0)
-        kmeans.fit(feature_matrix)
+    #     # Select initial medoids randomly
+    #     initial_medoids = np.random.choice(
+    #         range(self.num_nodes), self.n_repr, replace=False)
 
-        # Cluster labels for each node
-        labels = kmeans.labels_
+    #     # Use K-Medoids with the precomputed distance matrix
+    #     kmedoids_instance = kmedoids(
+    #         data=total_distance_matrix,
+    #         initial_index_medoids=initial_medoids,
+    #         metric=distance_metric(
+    #             type_metric.USER_DEFINED, func=lambda x, y: total_distance_matrix[int(x)][int(y)])
+    #     )
+    #     kmedoids_instance.process()
 
-        # Mapping each cluster to its nodes
-        clusters = {i: [] for i in range(self.n_repr)}
-        for idx, label in enumerate(labels):
-            clusters[label].append(idx)
+    #     # Get the clusters and medoids
+    #     clusters = kmedoids_instance.get_clusters()
+    #     medoids = kmedoids_instance.get_medoids()
 
-        return clusters, kmeans.cluster_centers_, labels
+    #     # Create a mapping of clusters
+    #     cluster_mapping = {i: [] for i in range(len(medoids))}
+    #     for idx, cluster in enumerate(clusters):
+    #         cluster_mapping[idx] = cluster
+
+    #     return cluster_mapping, medoids
+
+    # def cluster_KMeans(self):
+    #     """
+    #     Perform k-means clustering on the node features.
+    #     """
+    #     feature_matrix = self.compute_feature_matrix()
+
+    #     # Apply k-means clustering
+    #     kmeans = KMeans(n_clusters=self.n_repr, random_state=0)
+    #     kmeans.fit(feature_matrix)
+
+    #     # Cluster labels for each node
+    #     labels = kmeans.labels_
+
+    #     # Mapping each cluster to its nodes
+    #     clusters = {i: [] for i in range(self.n_repr)}
+    #     for idx, label in enumerate(labels):
+    #         clusters[label].append(idx)
+
+    #     return clusters, kmeans.cluster_centers_, labels
 
 #     def cluster_KMedoids(self):
 #         """
@@ -332,3 +363,89 @@ class AggregationClustering:
 #         return clusters, medoids, labels
 
 #     def cluster(self, method='KMeans'):
+
+
+class AggregationMetrics:
+    def __init__(self, original_features):
+        """
+        Initialize with original and aggregated node features.
+        :param original_features: List of dictionaries, each with keys ['time_series', 'duration_curves', 'ramp_duration_curves', 'correlation'].
+        :param aggregated_features: Same structure as original_features but after aggregation.
+        """
+        self.original_features = original_features
+
+    def compute_metrics(self, aggregated_features):
+        """
+        Compute all metrics based on the original and aggregated features.
+        :return: Dictionary with metric values.
+        """
+        self.aggregated_features = aggregated_features
+
+        metrics = {
+            "REEav": self.compute_reeav(),
+            "NRMSEav": self.compute_nrmseav(),
+            "CEav": self.compute_ceav(),
+            "NRMSERDCav": self.compute_nrmsedcav()
+        }
+        return metrics
+
+    def compute_reeav(self):
+        """
+        Compute Relative Energy Error Average (REEav).
+        """
+        errors = []
+        for node, orig in self.original_features.items():
+            agg = self.aggregated_features[node]
+            for key in orig["duration_curves"]:
+                orig_dc = orig["duration_curves"][key]
+                agg_dc = agg["duration_curves"][key]
+                total_energy_orig = np.sum(orig_dc)
+                total_energy_agg = np.sum(agg_dc)
+                relative_error = abs(total_energy_orig -
+                                     total_energy_agg) / total_energy_orig
+                errors.append(relative_error)
+        return np.mean(errors)
+
+    def compute_nrmseav(self):
+        """
+        Compute Normalized Root Mean Square Error Average (NRMSEav).
+        """
+        errors = []
+        for node, orig in self.original_features.items():
+            agg = self.aggregated_features[node]
+            for key in orig["duration_curves"]:
+                orig_dc = orig["duration_curves"][key]
+                agg_dc = agg["duration_curves"][key]
+                mse = np.mean((orig_dc - agg_dc) ** 2)
+                nrmse = np.sqrt(mse) / (np.max(orig_dc) - np.min(orig_dc))
+                errors.append(nrmse)
+        return np.mean(errors)
+
+    def compute_ceav(self):
+        """
+        Compute Correlation Error Average (CEav).
+        """
+        errors = []
+        for node, orig in self.original_features.items():
+            agg = self.aggregated_features[node]
+            for key in orig["correlation"]:
+                orig_corr = orig["correlation"][key]
+                agg_corr = agg["correlation"][key]
+                error = abs(orig_corr - agg_corr)
+                errors.append(error)
+        return np.mean(errors)
+
+    def compute_nrmsedcav(self):
+        """
+        Compute Normalized RMS Error of Ramp Duration Curve Average (NRMSERDCav).
+        """
+        errors = []
+        for node, orig in self.original_features.items():
+            agg = self.aggregated_features[node]
+            for key in orig["ramp_duration_curves"]:
+                orig_rdc = orig["ramp_duration_curves"][key]
+                agg_rdc = agg["ramp_duration_curves"][key]
+                mse = np.mean((orig_rdc - agg_rdc) ** 2)
+                nrmse = np.sqrt(mse) / (np.max(orig_rdc) - np.min(orig_rdc))
+                errors.append(nrmse)
+        return np.mean(errors)

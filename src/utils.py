@@ -17,6 +17,16 @@ def import_data():
     return lines_df, nodes_df, wind_df, solar_df
 
 
+def import_data_county():
+    nodes_df = pd.read_csv('../DATA/Dev/new_england_counties2019.csv')
+    wind_df = pd.read_csv(
+        '../DATA/Dev/county-level-CFs/hist/wind/cf_local_county_2014.csv')
+    solar_df = pd.read_csv(
+        '../DATA/Dev/county-level-CFs/hist/solar/cf_local_county_2014.csv')
+
+    return nodes_df, wind_df, solar_df
+
+
 def haversine(lat1, lon1, lat2, lon2):
     """
     Calculate the great-circle distance between two points on the Earth's surface.
@@ -37,7 +47,7 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 class Network:
-    def __init__(self, nodes_df, time_series_dict, lines_df, time_horizon=None):
+    def __init__(self, nodes_df, time_series_dict, lines_df=None, time_horizon=None):
         """
         Initializes a network with nodes, time series, and line data.
         - nodes_df: DataFrame with columns ['node_num', 'Lat', 'Lon', ...] for node properties.
@@ -47,7 +57,8 @@ class Network:
         - time_horizon: Optional time horizon (int). Defaults to shortest time series length.
         """
         self.nodes_df = nodes_df
-        self.lines_df = lines_df
+        if lines_df is not None:
+            self.lines_df = lines_df
         self.time_series_dict = time_series_dict
         if time_horizon is None:
             self.time_horizon = min(ts.shape[0]
@@ -77,8 +88,10 @@ class Network:
         print(f'  - Duration Curves: A dictionary with keys for each time series type in {
               self.time_series_dict.keys()}')
         print("    and values as the duration curve of the time series.")
-        print(
-            "  - Correlation: A dictionary with keys as tuples of types of time series")
+        print(f"  - Ramp Duration Curves (RDCs): A dictionary with keys for each time series type {
+              self.time_series_dict.keys()}")
+        print("    and values as the RDC (found by differentiating and subsequently sorting) of the time series.")
+        print("  - Correlation: A dictionary with keys as tuples of types of time series")
         print("    and values as correlation factors between those time series.")
 
     def compute_node_features(self):
@@ -91,7 +104,8 @@ class Network:
             node_features = {
                 'position': (self.nodes_df.iloc[node]['Lat'], self.nodes_df.iloc[node]['Lon']),
                 'time_series': {key: ts.iloc[:, node].values for key, ts in self.time_series_dict.items()},
-                'duration_curves': {key: np.flip(np.sort(ts.iloc[:, node].values.copy())) for key, ts in self.time_series_dict.items()}
+                'duration_curves': {key: np.flip(np.sort(ts.iloc[:, node].values.copy())) for key, ts in self.time_series_dict.items()},
+                'ramp_duration_curves': {key: np.flip(np.sort(np.diff(ts.iloc[:, node].values.copy()))) for key, ts in self.time_series_dict.items()}
             }
 
             correlation = {}
@@ -122,6 +136,9 @@ class Network:
         print(f"  - Duration Curves:")
         for key, series in node_features['duration_curves'].items():
             print(f"    {key}: {series}")
+        print(f"  - Ramp Duration Curves:")
+        for key, rdc in node_features['ramp_duration_curves'].items():
+            print(f"    {key}: {rdc}")
         print(f"  - Correlations:")
         for pair, corr in node_features['correlation'].items():
             print(f"    {pair}: {corr}")
