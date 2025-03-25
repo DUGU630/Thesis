@@ -4,7 +4,7 @@ import gurobipy as gp
 from gurobipy import GRB
 from sklearn.cluster import KMeans
 # from sklearn_extra.cluster import KMedoids
-import utils
+import utils_old
 from pyclustering.cluster.kmedoids import kmedoids
 from pyclustering.utils.metric import distance_metric, type_metric
 from pyclustering.utils import read_sample
@@ -58,7 +58,7 @@ class AggregationOptimizer:
                 # Position distance using Haversine formula
                 lat1, lon1 = self.nodes_features[i]['position']
                 lat2, lon2 = self.nodes_features[j]['position']
-                position_distance = utils.haversine(lat1, lon1, lat2, lon2)
+                position_distance = utils_old.haversine(lat1, lon1, lat2, lon2)
                 min_position_distance = min(
                     min_position_distance, position_distance)
                 max_position_distance = max(
@@ -112,7 +112,7 @@ class AggregationOptimizer:
                 # Position distance using Haversine formula
                 lat1, lon1 = self.nodes_features[i]['position']
                 lat2, lon2 = self.nodes_features[j]['position']
-                position_distance = utils.haversine(lat1, lon1, lat2, lon2)
+                position_distance = utils_old.haversine(lat1, lon1, lat2, lon2)
                 normalized_position_distance = (
                     position_distance - min_position_distance) / (max_position_distance - min_position_distance)
                 position_matrix[i, j] = normalized_position_distance

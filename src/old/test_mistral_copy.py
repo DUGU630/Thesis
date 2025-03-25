@@ -6,7 +6,7 @@ import gurobipy as gp
 from gurobipy import GRB
 from pyclustering.cluster.kmedoids import kmedoids
 from scipy.spatial.distance import cdist
-import utils as utils
+import utils_mistral as utils
 from datetime import datetime
 
 class SpatialAggregation:
@@ -17,16 +17,17 @@ class SpatialAggregation:
         self.nodes_features = node_features
         self.config = config
         self.num_original_nodes = len(node_features)
+        self.distance_metrics = self.compute_distance_metrics(node_features, node_features)
         self.optimized_assignment_dict = None
         self.cluster_assignment_dict = None
         self.distance_metrics = None
 
-    def set_distance_metrics(self, dir_distance_metrics = None):
+    def set_distance_metrics(self, load_distance_metrics = None):
         """
         Set the distance metrics from a precomputed file.
         """
-        if dir_distance_metrics is not None:
-            self.distance_metrics = self.load_distance_metrics(dir_distance_metrics)
+        if load_distance_metrics is not None:
+            self.distance_metrics = self.load_distance_metrics(load_distance_metrics)
         else:
             self.distance_metrics = self.compute_distance_metrics(self.nodes_features, self.nodes_features)
             if not os.path.exists("../results/distance_metrics"):
@@ -40,11 +41,8 @@ class SpatialAggregation:
         """
         Compute the distance matrix between node features.
         """
-        intra_correlation = True
-        if 'correlation' not in node_features_set1[list(node_features_set1.keys())[0]] or 'correlation' not in node_features_set2[list(node_features_set2.keys())[0]]:
-            intra_correlation = False
         num_nodes1 = len(node_features_set1)
-        num_nodes2 = len(node_features_set2)            
+        num_nodes2 = len(node_features_set2)
 
         positions_set1 = np.array([node['position'] for node in node_features_set1.values()])
         positions_set2 = np.array([node['position'] for node in node_features_set2.values()])
@@ -54,9 +52,8 @@ class SpatialAggregation:
         duration_curves_set2 = np.array([list(node['duration_curves'].values()) for node in node_features_set2.values()]).reshape(num_nodes2, -1)
         ramp_duration_curves_set1 = np.array([list(node['ramp_duration_curves'].values()) for node in node_features_set1.values()]).reshape(num_nodes1, -1)
         ramp_duration_curves_set2 = np.array([list(node['ramp_duration_curves'].values()) for node in node_features_set2.values()]).reshape(num_nodes2, -1)
-        if intra_correlation:
-            intra_correlation_set1 = np.array([list(node['correlation'].values()) for node in node_features_set1.values()]).reshape(num_nodes1, -1)
-            intra_correlation_set2 = np.array([list(node['correlation'].values()) for node in node_features_set2.values()]).reshape(num_nodes2, -1)
+        intra_correlation_set1 = np.array([list(node['correlation'].values()) for node in node_features_set1.values()]).reshape(num_nodes1, -1)
+        intra_correlation_set2 = np.array([list(node['correlation'].values()) for node in node_features_set2.values()]).reshape(num_nodes2, -1)
         supply_demand_mismatch_set1 = np.array([list(node['supply_demand_mismatch'].values()) for node in node_features_set1.values()]).reshape(num_nodes1, -1)
         supply_demand_mismatch_set2 = np.array([list(node['supply_demand_mismatch'].values()) for node in node_features_set2.values()]).reshape(num_nodes2, -1)
 
@@ -64,8 +61,7 @@ class SpatialAggregation:
         time_series_distance_matrix = self._compute_euclidean_distances(time_series_set1, time_series_set2)
         duration_curves_distance_matrix = self._compute_euclidean_distances(duration_curves_set1, duration_curves_set2)
         ramp_duration_curves_distance_matrix = self._compute_euclidean_distances(ramp_duration_curves_set1, ramp_duration_curves_set2)
-        if intra_correlation:
-            intra_correlation_distance_matrix = self._compute_euclidean_distances(intra_correlation_set1, intra_correlation_set2)
+        intra_correlation_distance_matrix = self._compute_euclidean_distances(intra_correlation_set1, intra_correlation_set2)
         supply_demand_mismatch_distance_matrix = self._compute_euclidean_distances(supply_demand_mismatch_set1, supply_demand_mismatch_set2)
         
         inter_correlation_distance_matrix = np.zeros((num_nodes1, num_nodes2))
@@ -81,33 +77,22 @@ class SpatialAggregation:
             time_series_distance_matrix = self._normalize_distances(time_series_distance_matrix)
             duration_curves_distance_matrix = self._normalize_distances(duration_curves_distance_matrix)
             ramp_duration_curves_distance_matrix = self._normalize_distances(ramp_duration_curves_distance_matrix)
-            if intra_correlation:
-                intra_correlation_distance_matrix = self._normalize_distances(intra_correlation_distance_matrix)
+            intra_correlation_distance_matrix = self._normalize_distances(intra_correlation_distance_matrix)
             supply_demand_mismatch_distance_matrix = self._normalize_distances(supply_demand_mismatch_distance_matrix)
             inter_correlation_distance_matrix = self._normalize_distances(inter_correlation_distance_matrix)
 
-        if intra_correlation:
-            return {
-                'position_distance': position_distance_matrix,
-                'time_series_distance': time_series_distance_matrix,
-                'duration_curves_distance': duration_curves_distance_matrix,
-                'rdc_distance': ramp_duration_curves_distance_matrix,
-                'intra_correlation_distance': intra_correlation_distance_matrix,
-                'inter_correlation_distance': inter_correlation_distance_matrix,
-                'supply_demand_mismatch_distance': supply_demand_mismatch_distance_matrix
-            }
-        else:
-            return {
-                'position_distance': position_distance_matrix,
-                'time_series_distance': time_series_distance_matrix,
-                'duration_curves_distance': duration_curves_distance_matrix,
-                'rdc_distance': ramp_duration_curves_distance_matrix,
-                'inter_correlation_distance': inter_correlation_distance_matrix,
-                'supply_demand_mismatch_distance': supply_demand_mismatch_distance_matrix
-            }
+        return {
+            'position_distance': position_distance_matrix,
+            'time_series_distance': time_series_distance_matrix,
+            'duration_curves_distance': duration_curves_distance_matrix,
+            'rdc_distance': ramp_duration_curves_distance_matrix,
+            'intra_correlation_distance': intra_correlation_distance_matrix,
+            'inter_correlation_distance': inter_correlation_distance_matrix,
+            'supply_demand_mismatch_distance': supply_demand_mismatch_distance_matrix
+        }
     
     @staticmethod
-    def compute_distance_matrix(distance_metrics, weights):
+    def compute_distance_matrice(distance_metrics, weights):
         num_nodes1, num_nodes2 = distance_metrics['position_distance'].shape
         total_distance_matrix = np.zeros((num_nodes1, num_nodes2))
 
@@ -117,12 +102,11 @@ class SpatialAggregation:
                     weights['position'] * distance_metrics['position_distance'][i, j] +
                     weights['time_series'] * distance_metrics['time_series_distance'][i, j] +
                     weights['duration_curves'] * distance_metrics['duration_curves_distance'][i, j] +
-                    weights['rdc'] * distance_metrics['rdc_distance'][i, j] +
-                    weights['inter_correlation'] * distance_metrics['inter_correlation_distance'][i, j] +
+                    weights['rdc'] * distance_metrics['ramp_duration_curves_distance'][i, j] -
+                    weights['intra_correlation'] * distance_metrics['intra_correlation_distance'][i, j] -
+                    weights['inter_correlation'] * distance_metrics['inter_correlation_distance'][i, j] -
                     weights['supply_demand_mismatch'] * distance_metrics['supply_demand_mismatch_distance'][i, j]
                 )
-                if 'intra_correlation_distance' in distance_metrics:
-                    total_distance += weights['intra_correlation'] * distance_metrics['intra_correlation_distance'][i, j]
                 total_distance_matrix[i, j] = total_distance
         
         return total_distance_matrix
@@ -131,8 +115,13 @@ class SpatialAggregation:
         dir_path = os.path.join("../results/distance_metrics", dir_name)
         os.makedirs(dir_path, exist_ok=True)
 
-        for key in distance_metrics:
-            pd.DataFrame(distance_metrics[key]).to_csv(f"{dir_path}/{key}.csv")
+        pd.DataFrame(distance_metrics['position_distance']).to_csv(f"{dir_path}/position_distance.csv")
+        pd.DataFrame(distance_metrics['time_series_distance']).to_csv(f"{dir_path}/time_series_distance.csv")
+        pd.DataFrame(distance_metrics['duration_curves_distance']).to_csv(f"{dir_path}/duration_curves_distance.csv")
+        pd.DataFrame(distance_metrics['rdc_distance']).to_csv(f"{dir_path}/rdc_distance.csv")
+        pd.DataFrame(distance_metrics['intra_correlation_distance']).to_csv(f"{dir_path}/intra_correlation_distance.csv")
+        pd.DataFrame(distance_metrics['inter_correlation_distance']).to_csv(f"{dir_path}/inter_correlation_distance.csv")
+        pd.DataFrame(distance_metrics['supply_demand_mismatch_distance']).to_csv(f"{dir_path}/supply_demand_mismatch_distance.csv")
         metadata = {
             'num_nodes1': distance_metrics['position_distance'].shape[0],
             'num_nodes2': distance_metrics['position_distance'].shape[1]
@@ -141,23 +130,30 @@ class SpatialAggregation:
         if 'file_paths' in config_dict:
             del config_dict['file_paths']
         for key in config_dict:
-            metadata[key] = [config_dict[key]]
-        metadata['timeseries'] = [[key for key in self.nodes_features[list(self.nodes_features.keys())[0]]['time_series']]]
+            metadata[key] = config_dict[key]
 
         pd.DataFrame(metadata).to_csv(f"{dir_path}/metadata.csv")
-
     
     @staticmethod
     def load_distance_metrics(dir_name):
         dir_path = os.path.join("../results/distance_metrics", dir_name)
-        
-        distance_metrics = {}
-        for file_name in os.listdir(dir_path):
-            if file_name.endswith('.csv') and file_name != 'metadata.csv':
-                key = file_name.replace('.csv', '')
-                distance_metrics[key] = pd.read_csv(os.path.join(dir_path, file_name)).values
-        
-        return distance_metrics
+        position_distance = pd.read_csv(f"{dir_path}/position_distance.csv").values
+        time_series_distance = pd.read_csv(f"{dir_path}/time_series_distance.csv").values
+        duration_curves_distance = pd.read_csv(f"{dir_path}/duration_curves_distance.csv").values
+        rdc_distance = pd.read_csv(f"{dir_path}/rdc_distance.csv").values
+        intra_correlation_distance = pd.read_csv(f"{dir_path}/intra_correlation_distance.csv").values
+        inter_correlation_distance = pd.read_csv(f"{dir_path}/inter_correlation_distance.csv").values
+        supply_demand_mismatch_distance = pd.read_csv(f"{dir_path}/supply_demand_mismatch_distance.csv").values
+        # metadata = pd.read_csv(f"{dir_path}/metadata.csv").to_dict()
+        return {
+            'position_distance': position_distance,
+            'time_series_distance': time_series_distance,
+            'duration_curves_distance': duration_curves_distance,
+            'rdc_distance': rdc_distance,
+            'intra_correlation_distance': intra_correlation_distance,
+            'inter_correlation_distance': inter_correlation_distance,
+            'supply_demand_mismatch_distance': supply_demand_mismatch_distance
+        }
 
     @staticmethod
     def _compute_position_distances(positions_set1, positions_set2):
@@ -182,9 +178,6 @@ class SpatialAggregation:
             min_val = np.min(distances)
         if max_val is None:
             max_val = np.max(distances)
-        if max_val - min_val == 0:
-            print("Normalization Warning: Division by zero (max-min). Returning ones matrix.")
-            return np.ones_like(distances)
         return (distances - min_val) / (max_val - min_val)
 
     def optimize(self):
@@ -194,10 +187,8 @@ class SpatialAggregation:
         n_repr = self.config.n_repr
         distance_metrics = self.distance_metrics
         weights = self.config.weights
-        total_distance_matrix = self.compute_distance_matrix(distance_metrics, weights)
+        total_distance_matrix = self.compute_distance_matrice(distance_metrics, weights)
         num_nodes = self.num_original_nodes
-        print(f"Optimizing with {num_nodes} nodes and {n_repr} representatives.")
-        print(f"The weights are: {weights}")
 
         model = gp.Model("node_aggregation")
         assignment_matrix_vars = model.addVars(num_nodes, num_nodes, vtype=GRB.BINARY, name="assignment_matrix")
@@ -257,13 +248,10 @@ class SpatialAggregation:
         """
         distance_metrics = self.distance_metrics
         weights = self.config.weights
-        total_distance_matrix = self.compute_distance_matrix(distance_metrics, weights)
+        total_distance_matrix = self.compute_distance_matrice(distance_metrics, weights)
 
         if n_repr is None:
             n_repr = self.config.n_repr
-
-        print(f"Clustering with {self.num_original_nodes} nodes and {n_repr} representatives.")
-        print(f"The weights are: {weights}")
 
         initial_medoids = np.random.choice(range(self.num_original_nodes), n_repr, replace=False)
         kmedoids_instance = kmedoids(total_distance_matrix, initial_medoids.tolist(), data_type='distance_matrix')
@@ -280,7 +268,7 @@ class SpatialAggregation:
 
         return cluster_assignment_dict
 
-    def compute_eval_metrics(self, aggregation_method:str, type="custom"):
+    def compute_metrics(self, aggregation_method:str, type="custom"):
         """
         Compute all metrics based on the original and aggregated features.
         :return: Dictionary with metric values.
@@ -314,11 +302,9 @@ class SpatialAggregation:
                 elif type == "literature":
                     REEav = self.compute_reeav(original_features, aggregated_feature)
                     NRMSEav = self.compute_nrmseav(original_features, aggregated_feature)
+                    CEav = self.compute_ceav(original_features, aggregated_feature)
                     NRMSERDCav = self.compute_nrmsedcav(original_features, aggregated_feature)
-                    node_errors_list.append([REEav, NRMSEav, NRMSERDCav])
-                    if 'correlation' in self.nodes_features[list(self.nodes_features.keys())[0]]:
-                        CEav = self.compute_ceav(original_features, aggregated_feature)
-                        node_errors_list[-1].append(CEav)
+                    node_errors_list.append([REEav, NRMSEav, CEav, NRMSERDCav])
 
                 else:
                     raise ValueError(f"Invalid metric type: {type}. Please choose between 'custom' and 'literature'.")
@@ -333,40 +319,21 @@ class SpatialAggregation:
 
         if type == "custom":
             weights = self.config.weights
-            if len(mean_error_values) == 7:
-                metrics = {'total': 1/len(mean_error_values) * (mean_error_values[0] * weights['position'] + mean_error_values[1] * weights['time_series'] + mean_error_values[2] * weights['duration_curves'] + mean_error_values[3] * weights['rdc'] + mean_error_values[4] * weights['intra_correlation'] + mean_error_values[5] * weights['inter_correlation'] + mean_error_values[6] * weights['supply_demand_mismatch']),
-                        'position': mean_error_values[0],
-                        'time_series': mean_error_values[1],
-                        'duration_curves': mean_error_values[2],
-                        'rdc': mean_error_values[3],
-                        'intra_correlation': mean_error_values[4],
-                        'inter_correlation': mean_error_values[5],
-                        'supply_demand_mismatch': mean_error_values[6]}
-            elif len(mean_error_values) == 6:
-                metrics = {'total': 1/len(mean_error_values) * (mean_error_values[0] * weights['position'] + mean_error_values[1] * weights['time_series'] + mean_error_values[2] * weights['duration_curves'] + mean_error_values[3] * weights['rdc'] + mean_error_values[4] * weights['inter_correlation'] + mean_error_values[5] * weights['supply_demand_mismatch']),
-                        'position': mean_error_values[0],
-                        'time_series': mean_error_values[1],
-                        'duration_curves': mean_error_values[2],
-                        'rdc': mean_error_values[3],
-                        'inter_correlation': mean_error_values[4],
-                        'supply_demand_mismatch': mean_error_values[5]}
-            else:
-                raise ValueError(f"Invalid number of error values: {len(mean_error_values)}.")
+            metrics = {'total': mean_error_values[1] * weights['position'] + mean_error_values[2] * weights['time_series'] + mean_error_values[3] * weights['duration_curves'] + mean_error_values[4] * weights['rdc'] + mean_error_values[5] * weights['intra_correlation'] + mean_error_values[6] * weights['inter_correlation'] + mean_error_values[7] * weights['supply_demand_mismatch'],
+                    'position': mean_error_values[1],
+                    'time_series': mean_error_values[2],
+                    'duration_curves': mean_error_values[3],
+                    'rdc': mean_error_values[4],
+                    'intra_correlation': mean_error_values[5],
+                    'inter_correlation': mean_error_values[6],
+                    'supply_demand_mismatch': mean_error_values[7]}
         elif type == "literature":
-            if 'correlation' in self.nodes_features[list(self.nodes_features.keys())[0]]:
-                metrics = {
-                    "REEav": mean_error_values[0],
-                    "NRMSEav": mean_error_values[1],
-                    "CEav": mean_error_values[2],
-                    "NRMSERDCav": mean_error_values[3]
-                }
-            else:
-                metrics = {
-                    "REEav": mean_error_values[0],
-                    "NRMSEav": mean_error_values[1],
-                    "NRMSERDCav": mean_error_values[2]
-                }
-            
+            metrics = {
+                "REEav": mean_error_values[0],
+                "NRMSEav": mean_error_values[1],
+                "CEav": mean_error_values[2],
+                "NRMSERDCav": mean_error_values[3]
+            }
         return metrics
 
     def compute_node_errors(self, original_features, aggregated_feature):
@@ -449,7 +416,6 @@ class TemporalAggregation:
         self.nodes_features = self.aggregator.nodes_features
 
         self.assignment_dict = assignment_dict
-        self.representative_days = None
         # if self.spatial_aggregation_method == "kmedoids":
         #     if self.aggregator.cluster_assignment_dict is None:
         #         raise ValueError("Clustering results are not available. Please run the KMedoids spatial clustering first.")
@@ -468,9 +434,8 @@ class TemporalAggregation:
         """
         sampled_nodes_time_serie = self._sampling()
         day_array = self._create_day_array(sampled_nodes_time_serie)
-        self.representative_days = sorted(self._get_representative_days(day_array))
-        print(f"Representative days: {self.representative_days}")
-        filtered_dict = {representative_node: {key: self._filter_time_series(value, self.representative_days) for key, value in time_series.items()} for representative_node, time_series in sampled_nodes_time_serie.items()}
+        representative_days = self._get_representative_days(day_array)
+        filtered_dict = {representative_node: {key: self._filter_time_series(value, representative_days) for key, value in time_series.items()} for representative_node, time_series in sampled_nodes_time_serie.items()}
         return filtered_dict
         
 
